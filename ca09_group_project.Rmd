@@ -192,7 +192,6 @@ listings_test %>%
 
 Now let's look at the rest of the data in more detail. We will start by looking at the variable property type.
 
-#CONTINUE HERE
 ## Property types
 
 We look at the variable `property_type` and use the `count` function to determine how many categories there are, their frequency and their proportions. 
@@ -222,24 +221,25 @@ Since the vast majority of the observations in the data are one of the top four 
 ```{r}
 listings <- listings %>%
   mutate(prop_type_simplified = case_when(
-    property_type %in% c("______","______", "______","______") ~ property_type, 
+    property_type %in% c("Entire rental unit","Private room in rental unit", "Entire condominium (condo)","Entire serviced apartment") ~ property_type, 
     TRUE ~ "Other"
   ))
   
 ```
 Use the code below to check that `prop_type_simplified` was correctly made.
 
-```
+```{r}
 listings %>%
   count(property_type, prop_type_simplified) %>%
-  arrange(desc(n))        
-```        
-
-
-
-
-
+  arrange(desc(n))
+```
+#Create column for price for 4 nights      
 #Add correlation data
+```{r}
+listings
+```
+
+
 #correlation data not linear so take logs
 #first check that there are no negative/zero values
 
@@ -267,7 +267,7 @@ There are 6 observations where price takes the value 0.
     * `ggplot2::ggplot()`
         * `geom_histogram()` or `geom_density()` for numeric continuous variables
         * `geom_bar()` or `geom_col()` for categorical variables
-    * `GGally::ggpairs()` for scaterrlot/correlation matrix
+    * `GGally::ggpairs()` for scaterplot/correlation matrix
         * Note that you can add transparency to points/density plots in the `aes` call, for example: `aes(colour = gender, alpha = 0.4)`
         
 You may wish to have a level 1 header (`#`) for your EDA, then use level 2 sub-headers (`##`) to make sure you cover all three EDA bases. **At a minimum** you should address these questions:
