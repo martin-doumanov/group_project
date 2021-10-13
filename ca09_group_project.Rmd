@@ -188,9 +188,56 @@ listings_test %>%
 
 
 ```
- 
 
-Now let's look at the price data in more detail. We will start by looking at the correlations between price and the other numeric variables.
+
+Now let's look at the rest of the data in more detail. We will start by looking at the variable property type.
+
+#CONTINUE HERE
+## Property types
+
+We look at the variable `property_type` and use the `count` function to determine how many categories there are, their frequency and their proportions. 
+
+```{r}
+listings_train %>% 
+  count(property_type, sort=TRUE) %>% 
+  count() #There are 64 categories.
+  
+property_counts<-listings_train %>% 
+  count(property_type, sort=TRUE) %>%
+  mutate(sum_n=sum(n)) %>% 
+  slice_max(order_by=n, n=4) %>% 
+  mutate(prop=n/sum_n)
+
+property_counts
+
+property_counts %>% 
+  summarize(total_prop=sum(prop))
+  
+```
+We can see that there are 64 different property types. The top 4 most common property types are entire rental units (48.3%), private rooms in rental units (35.6%), entire condos (2.7%) & entire serviced apartments (2.0%), which totals 88.5% of the data.
+
+
+Since the vast majority of the observations in the data are one of the top four or five property types, we would like to create a simplified version of `property_type` variable that has 5 categories: the top four categories and `Other`. Fill in the code below to create `prop_type_simplified`.
+
+```{r}
+listings <- listings %>%
+  mutate(prop_type_simplified = case_when(
+    property_type %in% c("______","______", "______","______") ~ property_type, 
+    TRUE ~ "Other"
+  ))
+  
+```
+Use the code below to check that `prop_type_simplified` was correctly made.
+
+```
+listings %>%
+  count(property_type, prop_type_simplified) %>%
+  arrange(desc(n))        
+```        
+
+
+
+
 
 #Add correlation data
 #correlation data not linear so take logs
@@ -253,28 +300,6 @@ DON'T INCLUDE HOST_ID AND OTHER IDENTIFIERS IN THE MODEL.
 Feel free to use interaction terms.
 
 
-## Propery types
-
-
-Next, we look at the variable `property_type`. We can use the `count` function to determine how many categories there are their frequency. What are the top 4 most common property types? What proportion of the total listings do they make up? 
-
-Since the vast majority of the observations in the data are one of the top four or five property types, we would like to create a simplified version of `property_type` variable that has 5 categories: the top four categories and `Other`. Fill in the code below to create `prop_type_simplified`.
-
-```
-listings <- listings %>%
-  mutate(prop_type_simplified = case_when(
-    property_type %in% c("______","______", "______","______") ~ property_type, 
-    TRUE ~ "Other"
-  ))
-  
-```
-Use the code below to check that `prop_type_simplified` was correctly made.
-
-```
-listings %>%
-  count(property_type, prop_type_simplified) %>%
-  arrange(desc(n))        
-```        
 
 Airbnb is most commonly used for travel purposes, i.e., as an alternative to traditional hotels. We only want to include  listings in our regression analysis that are intended for travel purposes:
 
