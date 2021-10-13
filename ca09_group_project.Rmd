@@ -233,6 +233,8 @@ listings %>%
   count(property_type, prop_type_simplified) %>%
   arrange(desc(n))
 ```
+
+#CONTINUE FROM HERE
 #Create column for price for 4 nights      
 #Add correlation data
 ```{r}
