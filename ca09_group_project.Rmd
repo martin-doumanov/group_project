@@ -39,9 +39,9 @@ library(leaflet) # for interactive HTML maps
 library(tidytext)
 library(viridis)
 library(vroom)
+library(Hmisc) # to compute correlation matrix with p-values
+library(corrplot) # to plot corr matrix
 ```
-
-
 
 
 In your final group assignment you have to analyse data about Airbnb listings and fit a model to predict the total cost for two people staying 4 nights in an AirBnB in a city. You can download AirBnB data from [insideairbnb.com](http://insideairbnb.com/get-the-data.html){target="_blank"}; it was originally scraped from airbnb.com. 
@@ -97,33 +97,13 @@ Conduct a thorough EDA. Recall that an EDA involves three things:
 listings %>% 
   glimpse()
 ```
-
-
 > Our dataset has 18,288 observations and 74 variables. It includes details about Airbnb listings in Berlin.
 
-
-
-```{r}
-
-#splitting data into training and test sets
-
-set.seed(1234) #setting a random seed to always get the same split 
-
-train_test_split <- initial_split(listings, prop = 0.80) #taking an 80-20 approach (for all the consultants out there)
-listings_train <- training(train_test_split)
-listings_test <- testing(train_test_split)
-
-```
-
-Now our test dataset has 3658 observations and training data has 14630 observations with 74 variables each.
-
-We will set our test data aside and do our analysis using only the training data
-
-* Computing summary statistics of the variables of interest, or finding NAs
+### Computing summary statistics of the variables of interest, or finding NAs
 
 ```{r}
 
-listings_train %>% #skimming only the training data, not test to avoid cheating
+listings %>% #skimming only the training data, not test to avoid cheating
   skim()
 
 ```
@@ -133,62 +113,46 @@ We will now list the variable names by type:
 
 ### Numeric
 ```{r}
-listings_train %>% 
+listings %>% 
   skim() %>% 
   filter(skim_type=="numeric") %>% 
   select(skim_variable)
 ```
 ### Factor
 ```{r}
-listings_train %>% 
+listings %>% 
   skim() %>% 
   filter(skim_type=="logical") %>% 
   select(skim_variable)
 ```
 ### Character
 ```{r}
-listings_train %>% 
+listings %>% 
   skim() %>% 
   filter(skim_type=="character") %>% 
   select(skim_variable)
 ```
-Notice that the variables 'host_response_rate', 'host_acceptance_rate' and 'price' have been categorised as character strings instead of numeric variables.
+Notice that the variables 'host_response_rate', 'host_acceptance_rate' and 'price' have been categorized as character strings instead of numeric variables.
 
 Since `price` is a quantitative variable, we need to make sure it is stored as numeric data `num` in the dataframe. To do so, we will first use `readr::parse_number()` which drops any non-numeric characters before or after the first number. We will also convert `host_response_rate` and `host_acceptance_rate`.
 
 ```{r}
-listings_train <- listings_train %>% 
+listings <- listings %>% 
   mutate(price = parse_number(price),
-         host_response_rate=parse_number(host_response_rate)/100,
-         host_acceptance_rate=parse_number(host_acceptance_rate)/100
+         host_response_rate = parse_number(host_response_rate)/100,
+         host_acceptance_rate = parse_number(host_acceptance_rate)/100
          )
+# We check the new type of the three variables ...
+typeof(listings$price)
+typeof(listings$host_response_rate)
+typeof(listings$host_acceptance_rate) #Price, host response rate and host acceptance rate are now stored as numbers for the training set
 
-typeof(listings_train$price)
-typeof(listings_train$host_response_rate)
-typeof(listings_train$host_acceptance_rate) #Price, host response rate and host acceptance rate are now stored as numbers for the training set
-
-#Checking the variables
-listings_train %>% 
+# ... and take a closer look at the variables
+listings %>% 
   select(price, host_response_rate, host_acceptance_rate) %>% 
   glimpse()
-
-listings_test <- listings_test %>% 
-  mutate(price = parse_number(price),
-         host_response_rate=parse_number(host_response_rate)/100,
-         host_acceptance_rate=parse_number(host_acceptance_rate)/100)
-
-typeof(listings_test$price)
-typeof(listings_test$host_response_rate)
-typeof(listings_test$host_acceptance_rate) #Price, host response rate and host acceptance rate are now stored as numbers for the test set
-
-#Checking the variables
-listings_test %>% 
-  select(price, host_response_rate, host_acceptance_rate) %>% 
-  glimpse()
-
 
 ```
-
 
 Now let's look at the rest of the data in more detail. We will start by looking at the variable property type.
 
@@ -197,11 +161,11 @@ Now let's look at the rest of the data in more detail. We will start by looking 
 We look at the variable `property_type` and use the `count` function to determine how many categories there are, their frequency and their proportions. 
 
 ```{r}
-listings_train %>% 
+listings %>% 
   count(property_type, sort=TRUE) %>% 
   count() #There are 64 categories.
   
-property_counts<-listings_train %>% 
+property_counts <- listings %>% 
   count(property_type, sort=TRUE) %>%
   mutate(sum_n=sum(n)) %>% 
   slice_max(order_by=n, n=4) %>% 
@@ -210,7 +174,7 @@ property_counts<-listings_train %>%
 property_counts
 
 property_counts %>% 
-  summarize(total_prop=sum(prop))
+  summarise(total_prop = sum(prop))
   
 ```
 We can see that there are 64 different property types. The top 4 most common property types are entire rental units (48.3%), private rooms in rental units (35.6%), entire condos (2.7%) & entire serviced apartments (2.0%), which totals 88.5% of the data.
@@ -226,41 +190,119 @@ listings <- listings %>%
   ))
   
 ```
-Use the code below to check that `prop_type_simplified` was correctly made.
+We can use the code below to check that `prop_type_simplified` was correctly made.
 
 ```{r}
 listings %>%
   count(property_type, prop_type_simplified) %>%
   arrange(desc(n))
 ```
+# ADD A BAR OR COL GRAPH HERE
 
-#CONTINUE FROM HERE
-#Create column for price for 4 nights      
-#Add correlation data
+## Prices - Creating the Dependent Variable
+
+First let's look at "price" in more detail:
 ```{r}
-listings
+
+favstats(~price, data = listings)
+
+```
+
+We can see that none of the price observations are missing, however the minimum price per night is 0, which seems suspicious. We will investigate this further and see how many observations have a price of 0.
+
+```{r}
+listings %>% 
+  filter(price==0) %>% 
+  count()
+```
+There are 8 observations where price takes the value 0.
+
+Next we are going to create a new variable price_4_nights, which represents the price we would have to pay to stay at an Airbnb property for 4 nights. Since we are interested in rentiong for two, we will exclude any properties that accommodate less than 2 people. We also exclude any properties with negative or 0 prices.
+
+```{r}
+listings <- listings %>% 
+  filter(accommodates >= 2) %>%
+  filter(price > 0) %>% 
+  mutate(price_4_nights = 4*price)
+
+```
+
+It is important to know the distribution of our dependent variable. To check this, we will plot a histogram of price_4_nights with the code below:
+
+```{r}
+listings %>% 
+  ggplot(aes(x = price_4_nights)) +
+  geom_histogram(color="grey") +
+  labs(title = "Distribution of Prices of Airbnb Appartment in Berlin for 4 nights",
+       subtitle = "Data inlcudes only appartments that accomodate at least 2 people",
+       x = "Price per 4 nights",
+       y = "",
+       caption="Data from: http://insideairbnb.com/get-the-data.html")
+
+
+```
+As we can see, the data on prices is heavily right-skewed. This can hurt the interpretative power of our model and we would need to address it before continuing with our regression analysis. Additionally, we see that although most properties lie within a range, there are some outlines very far from the median. This would also need to be adressed below.
+
+To deal with the distribution of prices, we will transform the price_4_nights using a log function.
+
+```{r}
+listings <- listings %>% 
+  mutate(log_price_4_nights = log(price_4_nights))
+
+listings %>% 
+  ggplot(aes(x = log_price_4_nights)) +
+  geom_histogram(color="grey") +
+  geom_vline(aes(xintercept = median(log_price_4_nights)),
+            color="blue", linetype="dashed", size=1)+
+  labs(title = "Distribution of Log Prices of Airbnb Appartment in Berlin for 4 nights",
+       subtitle = "Data inlcudes only appartments that accomodate at least 2 people",
+       x = "Log of Price per 4 nights",
+       y = "",
+       caption="Data from: http://insideairbnb.com/get-the-data.html")
+
+```
+As we can see, applying a log transformation made the distribution of prices much more like a normal distribution, although there is still a right-skew.
+
+#Add correlation data
+
+
+## Mimimum Nights
+
+Airbnb is most commonly used for travel purposes, i.e., as an alternative to traditional hotels. However, some properties might be intended for other purposes. We only want to include  listings in our regression analysis that are intended for travel purposes.That is why we need to look at minimum_nights in more detail:
+
+```{r}
+# First, we want to see what are the most common values for minimum_nights
+listings %>%
+  count(minimum_nights) %>%
+  arrange(desc(n))
+
+# We also look at the range of values for minimum_bights 
+favstats(~minimum_nights, data = listings)
+
+```
+
+As we predicted, most properties on Airbnb seem to be meant for travelers. The most common values are 2,1 and 3 nights, which would be reasonable for a tourist. We can also see, however, that some that have a 30 and 60 day minimum stay are among the 10 most common type of properties. We can guess these properties are meant as a substitute to renting from an agent or a landlord. In other words, these properties are meant for long-term stay and are not appropriate for our analysis. additionally, we can see that the median minimum stay requirement is 3 nights, where as the mean is around 9. The discrepancy comes from the large outliers we see in the data. For example, one property has a minimum stay of 1,124 nights, which heavily skews our data. 
+
+To deal with this, we will filter the data to include only properties that have a minimum stay of less than 5 night.
+
+```{r}
+listings <- listings %>% 
+  filter(minimum_nights <= 4)
+
+favstats(~minimum_nights, data = listings)
+
+listings %>% 
+  ggplot(aes(x = minimum_nights)) +
+  geom_histogram(color="grey") +
+  labs(title = "Distribution of Minimum Stay Requirements of Airbnb Apparments in Berlin",
+       subtitle = "Data inlcudes only appartments that accomodate at least 2 people",
+       x = "Minimum Nights Stay Requirement",
+       y = "",
+       caption="Data from: http://insideairbnb.com/get-the-data.html")
 ```
 
 
 #correlation data not linear so take logs
-#first check that there are no negative/zero values
-
-
-
-```{r}
-
-favstats(~price, data = listings_train)
-
-```
-We can see that none of the price observations are missing, however the minimum price per night is 0, which seems suspicious. We will investigate this further and see how many observations have a price of 0.
-
-```{r}
-listings_train %>% 
-  filter(price==0) %>% 
-  count()
-
-```
-There are 6 observations where price takes the value 0.
 
 
 
@@ -290,7 +332,6 @@ At this stage, you may also find you want to use `filter`, `mutate`, `arrange`, 
 
 ##USEFUL VARIABLES: review score, number of reviews, superhost, accomodate, property type, room type, cancellation policy, bathrooms, bedrooms, neighbourhood.
 
-BUILD A VARIABLE PRICE PER 4 NIGHTS. THIS IS THE DEPENDENT VARIABLE WHICH WE NEED TO MODEL.
 
 ##Use at least 960 data points for training. Use at least 40 observations per variable.
 ##Weekly price might fit better than daily price.
@@ -301,27 +342,13 @@ DON'T INCLUDE HOST_ID AND OTHER IDENTIFIERS IN THE MODEL.
 
 Feel free to use interaction terms.
 
-
-
-Airbnb is most commonly used for travel purposes, i.e., as an alternative to traditional hotels. We only want to include  listings in our regression analysis that are intended for travel purposes:
-
-- What are the  most common values for the variable `minimum_nights`? 
-- Is ther any value among the common values that stands out? 
-- What is the likely intended purpose for Airbnb listings with this seemingly unusual value for `minimum_nights`?
-
-Filter the airbnb data so that it only includes observations with `minimum_nights <= 4`
-
-        
 # Mapping 
 
-Visualisations of feature distributions and their relations are key to understanding a data set, and they can open up new lines of exploration. While we do not have time to go into all the wonderful geospatial visualisations one can do with R, you can use the following code to start with a map of your city, and overlay all AirBnB coordinates to get an overview of the spatial distribution of AirBnB rentals. For this visualisation we use the `leaflet` package, which includes a variety of tools for interactive maps, so you can easily zoom in-out, click on a point to get the actual AirBnB listing for that specific point, etc.
-
-The following code, having downloaded a dataframe `listings` with all AirbnB listings in Milan, will plot on the map all AirBnBs where `minimum_nights` is less than equal to four (4). You could learn more about `leaflet`, by following [the relevant Datacamp course on mapping with leaflet](https://www.datacamp.com/courses/interactive-maps-with-leaflet-in-r)
-
+Visualisations of feature distributions and their relations are key to understanding a data set, and they can open up new lines of exploration. We will use the following code to show a map of your city, and overlay all Airbnb coordinates to get an overview of the spatial distribution of properties. For this visualization, we use the `leaflet` package, which includes a variety of tools for interactive maps and allows for easy zoom in-out, clicking on a point to get the actual listing, etc.
 
 ```{r, out.width = '80%'}
 
-leaflet(data = filter(listings, minimum_nights <= 4)) %>% 
+leaflet(data = listings) %>% 
   addProviderTiles("OpenStreetMap.Mapnik") %>% 
   addCircleMarkers(lng = ~longitude, 
                    lat = ~latitude, 
@@ -330,6 +357,42 @@ leaflet(data = filter(listings, minimum_nights <= 4)) %>%
                    fillOpacity = 0.4, 
                    popup = ~listing_url,
                    label = ~property_type)
+```
+
+
+
+## Correlation Analysis
+
+Before we continue with regression analysis, it is important to understand the correlations between our variables. This will help us avoid multicollinearity problems when we construct our model specifications. The following code constructs a correlation matrix between some of the numeric variables we plan to use in our analysis:
+
+```{r}
+listings_cormax <- listings %>% 
+  select(host_response_rate, 
+         host_listings_count,
+         bedrooms,
+         beds,
+         maximum_nights,
+         number_of_reviews,
+         number_of_reviews_ltm,
+         number_of_reviews_l30d,
+         review_scores_rating,
+         review_scores_accuracy,
+         review_scores_cleanliness,
+         review_scores_checkin,
+         review_scores_communication,
+         review_scores_location,
+         review_scores_value,
+         reviews_per_month)
+
+cormax <- rcorr(as.matrix(na.omit(listings_cormax)))
+cormax
+```
+
+#CONTINUE FROM HERE
+
+```{r}
+cor <- cor(na.omit(listings_cormax))
+corrplot(cor)
 ```
 
     
@@ -349,6 +412,22 @@ Fit a regression model called `model1` with the following explanatory variables:
 We want to determine if `room_type` is a significant predictor of the cost for 4 nights, given everything else in the model. Fit a regression model called model2 that includes all of the explananatory variables in `model1` plus `room_type`. 
 
 
+# First, we need to divide our data into a test and training subset. This will allows us to test the predictive power of our model using an out-of-sample test
+```{r}
+
+#splitting data into training and test sets
+
+set.seed(1234) #setting a random seed to always get the same split 
+
+train_test_split <- initial_split(listings, prop = 0.80) #taking an 80-20 approach (for all the consultants out there)
+listings_train <- training(train_test_split)
+listings_test <- testing(train_test_split)
+
+```
+
+Now our test dataset has 3658 observations and training data has 14630 observations with 74 variables each.
+
+We will set our test data aside and do our analysis using only the training data
 
 ## Further variables/questions to explore on our own
 
