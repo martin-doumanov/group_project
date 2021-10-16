@@ -42,6 +42,7 @@ library(viridis)
 library(vroom)
 library(Hmisc) # to compute correlation matrix with p-values
 library(corrplot) # to plot corr matrix
+library(huxtable)
 ```
 
 
@@ -154,12 +155,126 @@ listings %>%
   glimpse()
 
 ```
+## The variables
 
-Now let's look at the rest of the data in more detail. We will start by looking at the variable property type.
+Now we will look at the variables in more detail. 
 
-## Property types
+### Price
 
-We look at the variable `property_type` and use the `count` function to determine how many categories there are, their frequency and their proportions. 
+First let's look at our dependent variable `price` in more detail:
+```{r}
+
+favstats(~price, data = listings)
+
+```
+
+We can see that none of the price observations are missing, however the minimum price per night is 0, which seems suspicious. We will investigate this further and see how many observations have a price of 0.
+
+```{r}
+listings %>% 
+  filter(price==0) %>% 
+  count()
+```
+There are 8 observations where price takes the value 0.
+
+Next we are going to create a new variable price_4_nights, which represents the price we would have to pay to stay at an Airbnb property for 4 nights. Since we are interested in renting for two, we will exclude any properties that accommodate less than 2 people. We also exclude any properties with negative or 0 prices.
+
+```{r}
+listings <- listings %>% 
+  filter(accommodates >= 2,
+         price > 0) %>%
+  mutate(price_4_nights = 4*price)
+
+```
+
+It is important to know the distribution of our dependent variable. To check this, we will plot a histogram of price_4_nights with the code below:
+
+```{r}
+listings %>% 
+  ggplot(aes(x = price_4_nights)) +
+  geom_histogram(color="grey") +
+  labs(title = "Distribution of Prices of Airbnb Apartment in Berlin for 4 nights",
+       subtitle = "Data includes only apartments that accommodate at least 2 people",
+       x = "Price per 4 nights",
+       y="Count",
+       caption="Data from: http://insideairbnb.com/get-the-data.html")
+
+
+```
+As we can see, the data on prices is heavily right-skewed. This can hurt the interpretative power of our model and we would need to address it before continuing with our regression analysis. 
+
+```{r}
+listings %>% 
+  ggplot(aes(x = price_4_nights)) +
+  geom_boxplot(color="grey") +
+  labs(title = "Distribution of Prices of Airbnb Apartment in Berlin for 4 nights",
+       subtitle = "Data includes only apartments that accommodate at least 2 people",
+       caption="Data from: http://insideairbnb.com/get-the-data.html")
+
+```
+
+Additionally, we can see from the boxplot that there are some outliers very far from the median. This would also need to be addressed below.
+
+To deal with the distribution of prices, we will transform the price_4_nights using a log function.
+
+```{r}
+listings <- listings %>% 
+  mutate(log_price_4_nights = log(price_4_nights))
+
+listings %>% 
+  ggplot(aes(x = log_price_4_nights)) +
+  geom_histogram(color="grey") +
+  geom_vline(aes(xintercept = median(log_price_4_nights)),
+            color="blue", linetype="dashed", size=1)+
+  labs(title = "Distribution of Log Prices of Airbnb Apartment in Berlin for 4 nights",
+       subtitle = "Data includes only apartments that accomodate at least 2 people",
+       x = "Log of Price per 4 nights",
+       y = "",
+       caption="Data from: http://insideairbnb.com/get-the-data.html")
+
+listings %>% 
+  ggplot(aes(x = log_price_4_nights)) +
+  geom_density(color="blue") +
+  geom_vline(aes(xintercept = median(log_price_4_nights)),
+            color="blue", linetype="dashed", size=1)+
+  labs(title = "Distribution of Log Prices of Airbnb Apartment in Berlin for 4 nights",
+       subtitle = "Data includes only apartments that accomodate at least 2 people",
+       x = "Log of Price per 4 nights",
+       y = "",
+       caption="Data from: http://insideairbnb.com/get-the-data.html")
+
+
+```
+As we can see, applying a log transformation made the distribution of prices much more like a normal distribution, although there is still a slight right-skew.
+
+
+```{r}
+listings %>% 
+  ggplot(aes(x = log_price_4_nights)) +
+  geom_boxplot(color="grey") +
+  labs(title = "Distribution of Log Prices of Airbnb Apartment in Berlin for 4 nights",
+       subtitle = "Data includes only apartments that accommodate at least 2 people",
+       x="Log of Price per 4 Nights",
+       caption="Data from: http://insideairbnb.com/get-the-data.html")
+
+```
+Once we log transform the price variable, there are still several outliers. We will identify these and remove them from our dataset.
+
+```{r}
+logprice_outliers <- boxplot(listings$log_price_4_nights)$out
+
+listings<-listings %>% 
+  mutate(log_price_4_nights = if_else(log_price_4_nights %in% logprice_outliers,
+                                             NA_real_,
+                                              log_price_4_nights
+                                    )
+  )
+```
+
+
+### Property types
+
+Next, we look at the variable `property_type` and use the `count` function to determine how many categories there are, their frequency and their proportions. 
 
 ```{r}
 listings %>% 
@@ -178,10 +293,9 @@ property_counts %>%
   summarise(total_prop = sum(prop))
   
 ```
-We can see that there are 68 different property types. The top 4 most common property types are entire rental units (48.0%), private rooms in rental units (35.7%), entire condos (2.7%) & entire serviced apartments (2.0%), which totals 88.4% of the data.
+We can see that there are 64 different property types. The top 4 most common property types are entire rental units (52.7%), private rooms in rental units (31.1%), entire condos (2.9%) & entire serviced apartments (2.1%), which totals 88.9% of the data.
 
-
-Since the vast majority of the observations in the data are one of the top four or five property types, we would like to create a simplified version of `property_type` variable that has 5 categories: the top four categories and `Other`. Fill in the code below to create `prop_type_simplified`.
+Since the vast majority of the observations in the data are one of the top four or five property types, we create a simplified version of `property_type` variable that has 5 categories: the top four categories and `Other`. 
 
 ```{r}
 listings <- listings %>%
@@ -194,82 +308,36 @@ listings <- listings %>%
   ))
   
 ```
-We can use the code below to check that `prop_type_simplified` was correctly made.
+
+We use the code below to check that `prop_type_simplified` was correctly made.
 
 ```{r}
 listings %>%
   count(property_type, prop_type_simplified) %>%
   arrange(desc(n))
 ```
-# ADD A BAR OR COL GRAPH HERE
 
-## Prices - Creating the Dependent Variable
-
-First let's look at "price" in more detail:
+We also make a bar plot.
 ```{r}
-
-favstats(~price, data = listings)
-
-```
-
-We can see that none of the price observations are missing, however the minimum price per night is 0, which seems suspicious. We will investigate this further and see how many observations have a price of 0.
-
-```{r}
-listings %>% 
-  filter(price==0) %>% 
-  count()
-```
-There are 8 observations where price takes the value 0.
-
-Next we are going to create a new variable price_4_nights, which represents the price we would have to pay to stay at an Airbnb property for 4 nights. Since we are interested in rentiong for two, we will exclude any properties that accommodate less than 2 people. We also exclude any properties with negative or 0 prices.
-
-```{r}
-listings <- listings %>% 
-  filter(accommodates >= 2,
-         price > 0) %>%
-  mutate(price_4_nights = 4*price)
-
-```
-
-It is important to know the distribution of our dependent variable. To check this, we will plot a histogram of price_4_nights with the code below:
-
-```{r}
-listings %>% 
-  ggplot(aes(x = price_4_nights)) +
-  geom_histogram(color="grey") +
-  labs(title = "Distribution of Prices of Airbnb Appartment in Berlin for 4 nights",
-       subtitle = "Data inlcudes only appartments that accomodate at least 2 people",
-       x = "Price per 4 nights",
-       y = "",
-       caption="Data from: http://insideairbnb.com/get-the-data.html")
-
-
-```
-As we can see, the data on prices is heavily right-skewed. This can hurt the interpretative power of our model and we would need to address it before continuing with our regression analysis. Additionally, we see that although most properties lie within a range, there are some outlines very far from the median. This would also need to be adressed below.
-
-To deal with the distribution of prices, we will transform the price_4_nights using a log function.
-
-```{r}
-listings <- listings %>% 
-  mutate(log_price_4_nights = log(price_4_nights))
 
 listings %>% 
-  ggplot(aes(x = log_price_4_nights)) +
-  geom_histogram(color="grey") +
-  geom_vline(aes(xintercept = median(log_price_4_nights)),
-            color="blue", linetype="dashed", size=1)+
-  labs(title = "Distribution of Log Prices of Airbnb Appartment in Berlin for 4 nights",
-       subtitle = "Data inlcudes only appartments that accomodate at least 2 people",
-       x = "Log of Price per 4 nights",
-       y = "",
-       caption="Data from: http://insideairbnb.com/get-the-data.html")
+  ggplot(aes(y=fct_rev(fct_infreq(prop_type_simplified)))) + 
+  geom_bar()+
+  labs(
+    title="Bar Plot of Simplified Property Type",
+    y="Property Type (Simplified)",
+    x="Count"
+  )+
+  NULL
+
 
 ```
-As we can see, applying a log transformation made the distribution of prices much more like a normal distribution, although there is still a right-skew.
+> SHOULD WE COMMENT ON THIS?
 
-## Mimimum Nights
 
-Airbnb is most commonly used for travel purposes, i.e., as an alternative to traditional hotels. However, some properties might be intended for other purposes. We only want to include  listings in our regression analysis that are intended for travel purposes.That is why we need to look at minimum_nights in more detail:
+## Minimum Nights
+
+Airbnb is most commonly used for travel purposes, i.e., as an alternative to traditional hotels. However, some properties might be intended for other purposes. We only want to include  listings in our regression analysis that are intended for travel purposes. In order to do this, we need to look at minimum_nights in more detail:
 
 ```{r}
 # First, we want to see what are the most common values for minimum_nights
@@ -277,12 +345,12 @@ listings %>%
   count(minimum_nights) %>%
   arrange(desc(n))
 
-# We also look at the range of values for minimum_bights 
+# We also look at the range of values for minimum_nights 
 favstats(~minimum_nights, data = listings)
 
 ```
 
-As we predicted, most properties on Airbnb seem to be meant for travelers. The most common values are 2,1 and 3 nights, which would be reasonable for a tourist. We can also see, however, that some that have a 30 and 60 day minimum stay are among the 10 most common type of properties. We can guess these properties are meant as a substitute to renting from an agent or a landlord. In other words, these properties are meant for long-term stay and are not appropriate for our analysis. additionally, we can see that the median minimum stay requirement is 3 nights, where as the mean is around 9. The discrepancy comes from the large outliers we see in the data. For example, one property has a minimum stay of 1,124 nights, which heavily skews our data. 
+As we predicted, most properties on Airbnb seem to be meant for travelers. The most common values are 2,1 and 3 nights, which would be reasonable for a tourist. We can also see, however, that some that have a 30 and 60 day minimum stay are among the 10 most common type of properties. We can guess these properties are meant as a substitute to renting from an agent or a landlord. In other words, these properties are meant for long-term stay and are not appropriate for our analysis. Additionally, we can see that the median minimum stay requirement is 3 nights, where as the mean is around 9. The discrepancy comes from the large outliers we see in the data. For example, one property has a minimum stay of 1,124 nights, which heavily skews our data. 
 
 To deal with this, we will filter the data to include only properties that have a minimum stay of less than 5 night.
 
@@ -295,15 +363,302 @@ favstats(~minimum_nights, data = listings)
 listings %>% 
   ggplot(aes(x = minimum_nights)) +
   geom_histogram(color="grey") +
-  labs(title = "Distribution of Minimum Stay Requirements of Airbnb Apparments in Berlin",
-       subtitle = "Data inlcudes only appartments that accomodate at least 2 people",
+  labs(title = "Distribution of Minimum Stay Requirements of Airbnb Apartments in Berlin",
+       subtitle = "Data includes only apartments that accommodate at least 2 people",
        x = "Minimum Nights Stay Requirement",
-       y = "",
+       y = "Count",
        caption="Data from: http://insideairbnb.com/get-the-data.html")
 ```
 
+### Bathrooms
 
-#correlation data not linear so take logs
+We have no bathrooms data, so unfortunately we cannot include this variable in our analysis.
+> SHOULD WE MODIFY BATHROOMS_TEXT?
+
+
+### Bed
+
+We will now look at the distribution of the `beds` variable.
+
+```{r}
+
+favstats(~beds, data=listings)
+
+
+listings %>% 
+  ggplot(aes(x = beds)) +
+  geom_histogram(color="grey") +
+  labs(title = "Distribution of Beds of Airbnb Apartments in Berlin",
+       subtitle = "Data includes only apartments that accommodate at least 2 people",
+       x = "Number of beds",
+       y = "Count",
+       caption="Data from: http://insideairbnb.com/get-the-data.html")
+
+```
+The data is right-skewed. There is even an apartment in the dataset which claim to have 17 beds. While this is possible, they may also be outliers. We will look at the boxplot.
+
+```{r}
+
+listings %>% 
+  ggplot(aes(x = beds)) +
+  geom_boxplot(color="grey") +
+  labs(title = "Boxplot of Beds of Airbnb Apartments in Berlin",
+       subtitle = "Data includes only apartments that accommodate at least 2 people",
+       x = "Number of beds",
+       caption="Data from: http://insideairbnb.com/get-the-data.html")
+
+```
+The boxplot confirms that the data is right-skewed. Next we check for and remove some outliers.
+
+```{r}
+beds_outliers<-boxplot(listings$beds)$out
+length(beds_outliers) #There are a large number of 'outliers'. Let's look at these more closely.
+
+beds_outliers %>% table() #There are still a large number of apartments with 4-10 beds, so we will not discard these.
+
+#We will only discard apartments with 11 or more beds.
+  
+listings<-listings %>% 
+  mutate(beds = if_else(beds>=11,NA_real_,beds)
+  )
+```
+
+
+### Bedrooms
+
+We now perform the same EDA on the `bedrooms` variable.
+
+
+```{r}
+
+favstats(~bedrooms, data=listings)
+
+
+listings %>% 
+  ggplot(aes(x = bedrooms)) +
+  geom_histogram(color="grey") +
+  labs(title = "Distribution of Bedrooms of Airbnb Apartments in Berlin",
+       subtitle = "Data includes only apartments that accommodate at least 2 people",
+       x = "Number of bedrooms",
+       y = "Count",
+       caption="Data from: http://insideairbnb.com/get-the-data.html")
+
+```
+
+Once again, the data is heavily right-skewed.
+
+
+```{r}
+
+listings %>% 
+  ggplot(aes(x = bedrooms)) +
+  geom_boxplot(color="grey") +
+  labs(title = "Boxplot of Bedrooms of Airbnb Apartments in Berlin",
+       subtitle = "Data includes only apartments that accommodate at least 2 people",
+       x = "Number of bedrooms",
+       caption="Data from: http://insideairbnb.com/get-the-data.html")
+
+```
+This skewness is confirmed in the boxplot.
+
+```{r}
+bedrooms_outliers<-boxplot(listings$bedrooms)$out
+length(bedrooms_outliers) #There are a large number of 'outliers'. Let's look at these more closely.
+
+bedrooms_outliers %>% table() #Even apartments with two bedrooms have been categorised as outliers, despite there being a large number in the dataset.
+
+#We will only discard apartments with 6 or more bedrooms.
+  
+listings<-listings %>% 
+  mutate(bedrooms = if_else(bedrooms>=6,NA_real_,bedrooms)
+  )
+```
+
+### Accommodates
+
+```{r}
+
+favstats(~accommodates, data=listings)
+
+```
+There is an apartment in the dataset which claims to accommodate 16 people. It's possible that this is an outlier so we will plot a histogram and boxplot to determine whether this is the case.
+
+```{r}
+
+listings %>% 
+  ggplot(aes(x = accommodates)) +
+  geom_histogram(color="grey") +
+  labs(title = "Distribution of people accommodated per Airbnb Apartment in Berlin",
+       subtitle = "Data includes only apartments that accommodate at least 2 people",
+       x = "Number of people accommodated",
+       y = "Count",
+       caption="Data from: http://insideairbnb.com/get-the-data.html")
+
+
+```
+Once again, the distribution has a positive skew. This may partially be because we filtered the data to include only rooms which accommodate at least 2 people.
+
+
+```{r}
+
+listings %>% 
+  ggplot(aes(x = accommodates)) +
+  geom_boxplot(color="grey") +
+  labs(title = "Distribution of people accommodated per Airbnb Apartment in Berlin",
+       subtitle = "Data includes only apartments that accommodate at least 2 people",
+       x = "Number of people accommodated",
+       caption="Data from: http://insideairbnb.com/get-the-data.html")
+
+
+```
+The boxplot shows that there are several outliers. Let's check how many points are classified as outliers and remove some of them.
+
+```{r}
+accommodates_outliers<-boxplot(listings$accommodates)$out
+length(accommodates_outliers) #There are a fair number of 'outliers'. Let's look at these more closely.
+
+accommodates_outliers %>% table() #There are a fairly large number of apartments which accommodate 8 people. 
+
+#We will only discard apartments which accommodate 9 or more people.
+  
+listings<-listings %>% 
+  mutate(accommodates = if_else(accommodates>=9,NA_real_,accommodates)
+  )
+```
+
+### Number of reviews
+
+```{r}
+
+listings %>% 
+  ggplot(aes(x = number_of_reviews)) +
+  geom_density(color="blue") +
+  labs(title = "Distribution of Reviews of Airbnb Apartments in Berlin",
+       subtitle = "Data includes only apartments that accommodate at least 2 people",
+       x = "Number of reviews",
+       caption="Data from: http://insideairbnb.com/get-the-data.html")
+
+```
+The distribution is heavily right-skewed. 
+
+Next we will look at the outliers.
+
+```{r}
+
+listings %>% 
+  ggplot(aes(x = number_of_reviews)) +
+  geom_boxplot(color="grey") +
+  labs(title = "Boxplot of Reviews of Airbnb Apartments in Berlin",
+       subtitle = "Data includes only apartments that accommodate at least 2 people",
+       x = "Number of reviews",
+       caption="Data from: http://insideairbnb.com/get-the-data.html")
+
+numreviews_outliers<-boxplot(listings$number_of_reviews)$out
+length(numreviews_outliers)
+
+#The boxplot indicates that there are a huge number of outliers.
+```
+
+The boxplot indicates that there are a huge number of technical outliers. We will not remove these. Perhaps some apartments have more reviews than others because they are in extremely popular locations, or perhaps they are larger apartments and each guest filled out a review. 
+
+
+### Reviews per month
+
+Similarly, we will also consider the number of reviews per month.
+
+```{r}
+listings %>% 
+  ggplot(aes(x = reviews_per_month)) +
+  geom_density(color="blue") +
+  labs(title = "Distribution of Reviews per month of Airbnb Apartments in Berlin",
+       subtitle = "Data includes only apartments that accommodate at least 2 people",
+       x = "Reviews per month",
+       y = "Density",
+       caption="Data from: http://insideairbnb.com/get-the-data.html")
+```
+As expected, this follows a similar shape to `number_of_reviews`.
+
+
+```{r}
+
+listings %>% 
+  ggplot(aes(x = reviews_per_month)) +
+  geom_boxplot(color="grey") +
+  labs(title = "Boxplot of Reviews of Airbnb Apartments in Berlin",
+       subtitle = "Data includes only apartments that accommodate at least 2 people",
+       x = "Reviews per month",
+       caption="Data from: http://insideairbnb.com/get-the-data.html")
+
+numreviews_outliers<-boxplot(listings$reviews_per_month)$out
+length(numreviews_outliers)
+
+#The boxplot indicates that there are a huge number of outliers.
+```
+Once again, there are a huge number of technical outliers.
+
+### Review Score
+
+
+
+### Neihbourhoods
+
+First, we want to explore the 3 variables related to neighborhoods `neighbourhood`, `neighbourhood_cleansed`, and `neighbourhood_group_cleansed` to understand which variable describes better the actual neighbourhoods in Berlin. 
+
+```{r}
+listings %>% 
+  select("neighbourhood","neighbourhood_cleansed","neighbourhood_group_cleansed")
+```
+The 'neighbourhood_group_cleansed' variable is the most appropriate to evaluate further, as it groups the correct unique neighbourhoods in Berlin. 
+
+Next, we want to see how many different neighborhoods we have in the dataset and how frequently they appear. We will be looking at the 'neighbourhood_group_cleansed' variable.
+
+```{r}
+
+listings %>%
+  count(neighbourhood_group_cleansed, sort=TRUE) %>% 
+  count() #There are 12 categories.
+  
+neighbourhood_counts <- listings %>% 
+  count(neighbourhood_group_cleansed, sort=TRUE) %>%
+  mutate(sum_n=sum(n)) %>% 
+  slice_max(order_by=n, n=6) %>% 
+  mutate(prop=n/sum_n)
+
+neighbourhood_counts
+
+neighbourhood_counts %>% 
+  summarise(total_prop = sum(prop))
+  
+  
+```
+
+We have a total of 12 neighbourhoods, however only 6 of them represent about 88.2% of all the observations. From our knowledge of Berlin, these 6 neighbourhoods are indeed the most popular ones while the others are more on the outskirts of the city, therefore, we will group the other 6 ones into the "Other" category.
+
+```{r}
+listings <- listings %>%
+    mutate(neighbourhood_simplified = case_when(
+    neighbourhood_group_cleansed %in% c("Friedrichshain-Kreuzberg",
+                         "Mitte", 
+                         "Pankow",
+                         "Neukölln",
+                         "Charlottenburg-Wilm.",
+                         "Tempelhof - Schöneberg") ~ neighbourhood_group_cleansed, 
+                        TRUE ~ "Other"
+  ))
+```
+
+We can check our output below.
+
+```{r}
+listings %>%
+  count(neighbourhood_group_cleansed, neighbourhood_simplified) %>%
+  arrange(desc(n))
+```
+
+
+
+### Facet price by various variables
+
 
 
 
@@ -360,8 +715,6 @@ leaflet(data = listings) %>%
                    label = ~property_type)
 ```
 
-
-
 ## Correlation Analysis
 
 Before we continue with regression analysis, it is important to understand the correlations between our variables. This will help us avoid multicollinearity problems when we construct our model specifications. The following code constructs a correlation matrix between some of the numeric variables we plan to use in our analysis:
@@ -390,13 +743,12 @@ cormax <- rcorr(as.matrix(na.omit(listings_cormax)))
 
 ```
 
-#CONTINUE FROM HERE
 
 ```{r}
 cor <- cor(na.omit(listings_cormax))
 corrplot(cor)
 ```
-> Next, we will look at the correlations of continuous variables:
+Next, we will look at the correlations of continuous variables:
 
 ```{r}
 listings %>% 
@@ -419,7 +771,7 @@ listings %>%
 
 For the target variable $Y$, we will use the cost for two people to stay at an Airbnb location for four (4) nights. 
 
-Create a new variable called `price_4_nights` that uses `price`, and `accomodates` to calculate the total cost for two people to stay at the Airbnb property for 4 nights. This is the variable $Y$ we want to explain.
+We have already created a new variable called `price_4_nights` that uses `price`, and `accomodates` to calculate the total cost for two people to stay at the Airbnb property for 4 nights. This is the variable $Y$ we want to explain.
 
 Use histograms or density plots to examine the distributions of `price_4_nights` and `log(price_4_nights)`. Which variable should you use for the regression model? Why?
 
@@ -431,7 +783,10 @@ Fit a regression model called `model1` with the following explanatory variables:
 We want to determine if `room_type` is a significant predictor of the cost for 4 nights, given everything else in the model. Fit a regression model called model2 that includes all of the explananatory variables in `model1` plus `room_type`. 
 
 
-# First, we need to divide our data into a test and training subset. This will allows us to test the predictive power of our model using an out-of-sample test
+# Creating a Control Sample
+
+First, we need to divide our data into a test and training subset. This will allows us to test the predictive power of our model using an out-of-sample test
+
 ```{r}
 
 #splitting data into training and test sets
@@ -448,6 +803,96 @@ Now our test dataset has 3658 observations and training data has 14630 observati
 
 We will set our test data aside and do our analysis using only the training data
 
+```{r}
+
+# Model 1 - Property Type, Number of Reviews, Review Scores
+model1 <- lm(log_price_4_nights ~ prop_type_simplified + 
+                                  number_of_reviews + 
+                                  review_scores_rating, 
+             data = listings_train)
+
+# Since prop_type_simplified is a categorical variable with 5 possible options, the model only shows 4 coefficients. The fifth one (Entire Condo), is incorporated in the intercept
+
+model1 %>% 
+broom::tidy(conf.int=TRUE)
+
+model1 %>% 
+   broom::glance()
+```
+Overall, Model 1 has p-value of 0, which means it is statistically significant. Furthermore, according to R squared, our model explains 34% of the variation in log_price_4_nights with an adjusted R squared of 34%. Additionally, all the variables used are significant at the 95% confidence level. 
+
+Since the variable property_type is categorical  with 5 possible options, the model only shows 4 coefficients. The fifth one (Entire Condo), is incorporated in the intercept. This means the coefficients of the the other four are in relation to the fifth one. To interpret the coefficients for a log-transformed dependent variable, we are going to take the exponent of the coefficient. In this case, entire rental units are on average 12.0% cheaper than entire condos for 4 nights. Similarly, entire serviced apartments are 67.4% more expensive than entire condos, whereas privet rooms in rental units are 51.1% cheaper than entire condos. Finally, other types of properties are on average 17.5% cheaper than entire condos.
+
+Moreover, we see that one unit change in review_scores_rating corresponds to 3.5% higher price per 4 nights. 
+
+Finally, every additional review corresponds to 0.06% higher price per 4 nights. This is quite small but we also have to consider that the unit change in number_of_reviews is a single review. The maximum number of reviews on a property is 655 and we can see that if the unit change was 100, for every 100 additional reviews, the price per 4 nights would increase by 5.6%, which looks much more substantial.
+
+```{r}
+
+# Model 2 - Model 1 + Room Type
+
+model2 <- lm(log_price_4_nights ~  prop_type_simplified + 
+                                   number_of_reviews + 
+                                   review_scores_rating +
+                                   room_type,
+             data = listings_train)
+
+# Since room_type is a categorical variable with 4 possible options, the model only shows 3 coefficients. The fourth option (Entire Home/ Apartment) is incorporated in the intercept
+
+model2 %>% 
+broom::tidy(conf.int=TRUE)
+
+model2 %>% 
+   broom::glance()
+
+```
+Model 2 is also statistically significant, with a p-value of 0. Additionally, it explains 39.23% of the vriation in log_price_4_nights, which is higher than Model 1. All variables are statistically significant. To compare the two models, however, we need to look at the adjusted r-squared, since Model 2 includes one additional variable. Model 2 has an adjusted r-squared of 39.16% compared to 34.02% for Model 1. We can conclude that Model 2 has a higher predictive power than Model 1.
+
+Since room_type is a categorical variable with 4 possible options, the model only shows 3 coefficients. The fourth option (Entire Home/ Apartment) is incorporated in the intercept. To interpret the coefficients for a log-transformed dependent variable, we are going to take the exponent of the coefficient. This means that hotel rooms, for example, are on average 38.9% more expensive than entire home/apartments. Similarly, private rooms 50.7% cheaper, whereas shared rooms are 66.9% cheaper than entire homes.
+
+Now, before we continue with additional model specifications, we are going to perform a VIF test to echeck for multicollinearity:
+```{r}
+autoplot(model2)
+
+car::vif(model2)
+```
+We  can see that room_type and property_type_simplified have VIF socres of more than 10, which means there is potential multicollinearity problem in our model. Before we proceed with the analysis, we will test which variable has a higher predictive power and remove the other:
+
+```{r}
+
+model2_property <- lm(log_price_4_nights ~  prop_type_simplified + 
+                                           number_of_reviews + 
+                                           review_scores_rating,
+                     data = listings_train)
+model2_room <- lm(log_price_4_nights ~  number_of_reviews + 
+                                       review_scores_rating +
+                                       room_type,
+                     data = listings_train)
+
+huxtable:: huxreg(list("Property Type Model" = model2_property, 
+                       "Room Type Model" = model2_room), 
+                  statistics = c('#observations' = 'nobs', 
+                                'R squared' = 'r.squared', 
+                                'Adj. R Squared' = 'adj.r.squared', 
+                                'Residual SE' = 'sigma')
+                  ) %>% 
+  set_caption('Comparison of Property Type vs. Room Type Models')
+
+model2 %>% 
+broom::tidy(conf.int=TRUE)
+
+model2 %>% 
+   broom::glance()
+```
+
+As we can see from the table, the model that includes room types instead of property types has both a higher r-squared and adj. r-squared. To avoid multicollinearity, we will continue using that model and will discard property type.
+
+```{r}
+car::vif(model2_room)
+
+```
+
+
 ## Further variables/questions to explore on our own
 
 Our dataset has many more variables, so here are some ideas on how you can extend your analysis
@@ -458,6 +903,182 @@ Our dataset has many more variables, so here are some ideas on how you can exten
 1. For all cities, there are 3 variables that relate to neighbourhoods: `neighbourhood`, `neighbourhood_cleansed`, and `neighbourhood_group_cleansed`. There are typically more than 20 neighbourhoods in each city, and it wouldn't make sense to include them all in your model. Use your city knowledge, or ask someone with city knowledge, and see whether you can group neighbourhoods together so the majority of listings falls in fewer (5-6 max) geographical areas. You would thus need to create a new categorical variabale `neighbourhood_simplified` and determine whether location is a predictor of `price_4_nights`
 1. What is the effect of `avalability_30` or `reviews_per_month` on `price_4_nights`, after we control for other variables?
 
+```{r}
+
+# Model 3 - Adding property-specific characteristics to Model_Rooms. We exclude `bathrooms` because there is not data for any of the observations 
+
+model3 <- lm(log_price_4_nights ~ number_of_reviews + 
+                                  review_scores_rating +
+                                  room_type +
+                                  bedrooms +
+                                  beds +
+                                  accommodates,
+                     data = listings_train)
+
+# We construct a table with the regression output
+huxtable:: huxreg(list("Amenities Model" = model3), 
+                  statistics = c('#observations' = 'nobs', 
+                                'R squared' = 'r.squared', 
+                                'Adj. R Squared' = 'adj.r.squared', 
+                                'Residual SE' = 'sigma',
+                                'P-Value' = 'p.value')
+                  )
+model3 %>% 
+broom::tidy(conf.int=TRUE)
+
+model3 %>% 
+   broom::glance()
+
+
+```
+
+We see from the table that Model 3 is statistically significant and adding information about property amenities like number of bedrooms and how many people a property can accommodate greatly increases the predictive power of the model. We see a r-squared of 52.4% and an adjusted r-squared of 52.3%. However, when we look at the coefficients, we see that both number of beds and number of reviews are not statistically significant. This is surprising, since number of reviews was significant in our previous model specifications.
+
+One potential explanation for this could be that there is multicollinearity. If we think about it, the number of people a property will accomodate should be closely related to the number of beds in the property, as well as to the number of bedrooms. We check this with a VIF test below:
+
+```{r}
+
+# We test for multicollinearity
+car::vif(model3)
+
+```
+
+Although the results don't suggest there is multicollinearity problem with Model 3, we will attempt to remove `accommodates` to see the effect:
+
+```{r}
+
+# Model 4 - Model 3 without `accommodates`
+
+model4 <- lm(log_price_4_nights ~ number_of_reviews + 
+                                  review_scores_rating +
+                                  room_type +
+                                  bedrooms +
+                                  beds,
+                     data = listings_train)
+
+# We construct a table with the regression output
+huxtable:: huxreg(list("No-Accommodates Model" = model4), 
+                  statistics = c('#observations' = 'nobs', 
+                                'R squared' = 'r.squared', 
+                                'Adj. R Squared' = 'adj.r.squared', 
+                                'Residual SE' = 'sigma',
+                                'P-Value' = 'p.value')
+                  )
+car::vif(model4)
+```
+
+We can see that now, both beds and number of reviews are statistically significant. The predictive power of our model has not decreased by much either (50.1% compared to 52.3% adjusted r-squared). We will proceed with Model 4.
+
+```{r}
+# Model 5 - Model 4 + host_is_superhost
+
+model5 <- lm(log_price_4_nights ~ number_of_reviews + 
+                                  review_scores_rating +
+                                  room_type +
+                                  bedrooms +
+                                  beds+
+                                  host_is_superhost,
+                     data = listings_train)
+
+# We construct a table with the regression output
+huxtable:: huxreg(list("Superhost Model" = model5), 
+                  statistics = c('#observations' = 'nobs', 
+                                'R squared' = 'r.squared', 
+                                'Adj. R Squared' = 'adj.r.squared', 
+                                'Residual SE' = 'sigma',
+                                'P-Value' = 'p.value')
+                  )
+car::vif(model5)
+
+
+
+```
+Model 5 is statistically significant, with a p-value of 0. Additionally, Model 5 has a slightly better predictive power than Model 4, although the differences in adj. r-squared are very small (0.1%). The new variable we added, host_is_superhost, is statistically significant, but now the number_of_reviews is not. One potential explanation is that the the number of reviews has different effect on the price depending on if the host is a superhost or not. To deal with this, we will create an interaction term between `host_is_superhost` and `number_of_reviews`:
+
+```{r}
+
+model5_inter <- lm(log_price_4_nights ~ number_of_reviews + 
+                                  review_scores_rating +
+                                  room_type +
+                                  bedrooms +
+                                  beds+
+                                  host_is_superhost+
+                                  host_is_superhost*number_of_reviews,
+                     data = listings_train)
+
+# We construct a table with the regression output
+huxtable:: huxreg(list("Superhost Model + Interaction" = model5_inter), 
+                  statistics = c('#observations' = 'nobs', 
+                                'R squared' = 'r.squared', 
+                                'Adj. R Squared' = 'adj.r.squared', 
+                                'Residual SE' = 'sigma',
+                                'P-Value' = 'p.value')
+                  )
+car::vif(model5_inter)
+
+model5_inter %>% 
+broom::tidy(conf.int=TRUE)
+
+```
+
+First, we see that including the interaction term made number_of_reviews statistically significant again and the new model has a slightly higher predictive power than the old one (50.6% adj. R squared compared to 50.5%). The way to interpret the new coefficient is as follows: when the host is not superhost, each additional review corresponds to approximately 0.03% higher price. When the host is a superhost, each additional review corresponds to 0.03% lower price. Additionally, being a superhost corresponds to 15.3% higher price when controlling for the number of reviews.
+
+We now see that review score is nolonger significant. One explanation for this could be that being a superhost is directly related to the score of a host. We will try to solve this problem by removing review_scores_rating
+
+
+```{r}
+model6 <- lm(log_price_4_nights ~ number_of_reviews + 
+                                  room_type +
+                                  bedrooms +
+                                  beds+
+                                  host_is_superhost+
+                                  host_is_superhost*number_of_reviews,
+                     data = listings_train)
+
+# We construct a table with the regression output
+huxtable:: huxreg(list("Superhost Model + Interaction - Reviews Score" = model6), 
+                  statistics = c('#observations' = 'nobs', 
+                                'R squared' = 'r.squared', 
+                                'Adj. R Squared' = 'adj.r.squared', 
+                                'Residual SE' = 'sigma',
+                                'P-Value' = 'p.value')
+                  )
+car::vif(model6)
+
+model6 %>% 
+broom::tidy(conf.int=TRUE)
+```
+
+Modle 6 has much lower predictive power than our previous model. Additionally, number_of_reviews is no longer statistically significant. The variable host_is_superhost is statistically significant and has a large effect on the log_price_4_nights. The probelm is that host_is_superhost is directly related to the number of reviews a host has and how high their score is. To determine weather we should proceed with host_is_superhost or review_score_rating and number_of_reviews, we will create another model and compare it to Model 4:
+
+```{r}
+model7 <- lm(log_price_4_nights ~ room_type +
+                                  bedrooms +
+                                  beds+
+                                  host_is_superhost,
+                     data = listings_train)
+
+# We construct a table with the regression output
+huxtable:: huxreg(list("Superhost Model Only" = model7), 
+                  statistics = c('#observations' = 'nobs', 
+                                'R squared' = 'r.squared', 
+                                'Adj. R Squared' = 'adj.r.squared', 
+                                'Residual SE' = 'sigma',
+                                'P-Value' = 'p.value')
+                  )
+car::vif(model7)
+
+model7 %>% 
+broom::tidy(conf.int=TRUE)
+
+
+```
+
+
+Although all variables in Model 7 are statistically significant, the predictive power of the model is lower than Model 4. This means that host_is_superhost is less powerful than the combination of review_score_rating and number_of_reviews and we will not include it in our model. We will continue with our analysis using model specification 4.
+
+# Plan for models:
+# 
 
 ## Diagnostics, collinearity, summary tables
 
