@@ -18,6 +18,7 @@ output:
 options(knitr.table.format = "html") 
 knitr::opts_chunk$set(warning = FALSE, message = FALSE, 
   comment = NA, dpi = 300)
+
 ```
 
 
@@ -103,7 +104,7 @@ listings %>%
 
 ```{r}
 
-listings %>% #skimming only the training data, not test to avoid cheating
+listings %>% 
   skim()
 
 ```
@@ -177,7 +178,7 @@ property_counts %>%
   summarise(total_prop = sum(prop))
   
 ```
-We can see that there are 64 different property types. The top 4 most common property types are entire rental units (48.3%), private rooms in rental units (35.6%), entire condos (2.7%) & entire serviced apartments (2.0%), which totals 88.5% of the data.
+We can see that there are 68 different property types. The top 4 most common property types are entire rental units (48.0%), private rooms in rental units (35.7%), entire condos (2.7%) & entire serviced apartments (2.0%), which totals 88.4% of the data.
 
 
 Since the vast majority of the observations in the data are one of the top four or five property types, we would like to create a simplified version of `property_type` variable that has 5 categories: the top four categories and `Other`. Fill in the code below to create `prop_type_simplified`.
@@ -185,8 +186,11 @@ Since the vast majority of the observations in the data are one of the top four 
 ```{r}
 listings <- listings %>%
   mutate(prop_type_simplified = case_when(
-    property_type %in% c("Entire rental unit","Private room in rental unit", "Entire condominium (condo)","Entire serviced apartment") ~ property_type, 
-    TRUE ~ "Other"
+    property_type %in% c("Entire rental unit",
+                         "Private room in rental unit", 
+                         "Entire condominium (condo)",
+                         "Entire serviced apartment") ~ property_type, 
+                        TRUE ~ "Other"
   ))
   
 ```
@@ -221,8 +225,8 @@ Next we are going to create a new variable price_4_nights, which represents the 
 
 ```{r}
 listings <- listings %>% 
-  filter(accommodates >= 2) %>%
-  filter(price > 0) %>% 
+  filter(accommodates >= 2,
+         price > 0) %>%
   mutate(price_4_nights = 4*price)
 
 ```
@@ -262,9 +266,6 @@ listings %>%
 
 ```
 As we can see, applying a log transformation made the distribution of prices much more like a normal distribution, although there is still a right-skew.
-
-#Add correlation data
-
 
 ## Mimimum Nights
 
@@ -382,10 +383,11 @@ listings_cormax <- listings %>%
          review_scores_communication,
          review_scores_location,
          review_scores_value,
-         reviews_per_month)
+         reviews_per_month,
+         log_price_4_nights)
 
 cormax <- rcorr(as.matrix(na.omit(listings_cormax)))
-cormax
+
 ```
 
 #CONTINUE FROM HERE
@@ -394,6 +396,23 @@ cormax
 cor <- cor(na.omit(listings_cormax))
 corrplot(cor)
 ```
+> Next, we will look at the correlations of continuous variables:
+
+```{r}
+listings %>% 
+  ggpairs(columns = c(
+                      "number_of_reviews",
+                      "review_scores_rating",
+                      "bedrooms", 
+                      "beds",
+                      "accommodates",
+                      "log_price_4_nights",
+                      "host_response_rate",
+                      "host_listings_count",
+                      "reviews_per_month"))
+          
+```
+
 
     
 # Regression Analysis
