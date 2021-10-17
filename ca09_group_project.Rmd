@@ -994,17 +994,11 @@ Fit a regression model called `model1` with the following explanatory variables:
 We want to determine if `room_type` is a significant predictor of the cost for 4 nights, given everything else in the model. Fit a regression model called model2 that includes all of the explananatory variables in `model1` plus `room_type`. 
 
 
-# Creating a Control Sample
+# Creating a test set
 
-First, we need to divide our data into a test and training subset. This will allows us to test the predictive power of our model using an out-of-sample test. Since we are interested in renting for two, we will exclude any properties that accommodate less than 2 people, as well as any properties that have a maximum stay requirement of less than 4 nights.
+First, we need to divide our data into a test and training subset. This will allows us to test the predictive power of our model using an out-of-sample test.
 
 ```{r}
-
-# We remove properties that accommodate less than 2 people or have a maximum night restriction of less than 4 nights
-listings <- listings %>% 
-  filter(accommodates >= 2,
-          maximum_nights >= 4)
-
 
 #splitting data into training and test sets
 
@@ -1016,7 +1010,7 @@ listings_test <- testing(train_test_split)
 
 ```
 
-Now our test dataset has 3658 observations and training data has 14630 observations with 74 variables each.
+Now our test dataset has 2250 observations and training data has 8999 observations with 79 variables each.
 
 We will set our test data aside and do our analysis using only the training data
 
@@ -1045,13 +1039,13 @@ model1 %>%
    broom::glance()
 ```
 # @GROUP4: UPDATE COEFFICIENTS and statistical significance!!
-Overall, Model 1 has p-value of 0, which means it is statistically significant. Furthermore, according to R squared, our model explains 36.88% of the variation in log_price_4_nights with an adjusted R squared of 36.8%. Additionally, all the variables used are significant at the 95% confidence level. 
+Overall, Model 1 has p-value of 0, which means it is statistically significant. Furthermore, according to R squared, our model explains 36.9% of the variation in log_price_4_nights with an adjusted R squared of 36.8%. Additionally, all the variables used are significant at the 5% level. 
 
-Since the variable property_type is categorical  with 5 possible options, the model only shows 4 coefficients. The fifth one (Entire Condo), is incorporated in the intercept. This means the coefficients of the the other four are in relation to the fifth one. To interpret the coefficients for a log-transformed dependent variable, we are going to take the exponent of the coefficient. In this case, entire rental units are on average 12.8% cheaper than entire condos for 4 nights. Similarly, entire serviced apartments are 58.6% more expensive than entire condos, whereas private rooms in rental units are 57.0% cheaper than entire condos. Finally, other types of properties are on average 19.9% cheaper than entire condos.
+Since the variable property_type is categorical  with 5 possible options, the model only shows 4 coefficients. The fifth one (Entire Condo), is incorporated in the intercept. This means the coefficients of the other four are in relation to the fifth one. To interpret the coefficients for a log-transformed dependent variable, we are going to take the exponent of the coefficient. In this case, entire rental units are on average 12.4% cheaper than entire condos for 4 nights. Similarly, entire serviced apartments are 58.6% more expensive than entire condos, whereas private rooms in rental units are 57.0% cheaper than entire condos. Finally, other types of properties are on average 19.9% cheaper than entire condos.
 
-Moreover, we see that one unit change in review_scores_rating corresponds to 3.6% higher price per 4 nights. 
+Moreover, we see that one unit change in review_scores_rating corresponds to 3.7% higher price per 4 nights. 
 
-Finally, every additional review corresponds to 0.05% higher price per 4 nights. This is quite small but we also have to consider that the unit change in number_of_reviews is a single review. The maximum number of reviews on a property is 655 and we can see that if the unit change was 100, for every 100 additional reviews, the price per 4 nights would increase by 5.7%, which looks much more substantial.
+Finally, every additional review corresponds to 0.1% higher price per 4 nights. This is quite small but we also have to consider that the unit change in number_of_reviews is a single review. The maximum number of reviews on a property is 655 and we can see that if the unit change was 100, for every 100 additional reviews, the price per 4 nights would increase by 10.5%, which looks much more substantial.
 
 ```{r}
 
@@ -1081,11 +1075,11 @@ model2 %>%
 
 ```
 # @GROUP4: UPDATE COEFFICIENTS and statistical significance!!
-Model 2 is also statistically significant, with a p-value of 0. Additionally, it explains 41.2% of the variation in log_price_4_nights, which is higher than Model 1. All variables are statistically significant. To compare the two models, however, we need to look at the adjusted r-squared, since Model 2 includes one additional variable. Model 2 has an adjusted r-squared of 41.11% compared to 36.83% for Model 1. We can conclude that Model 2 has a higher predictive power than Model 1.
+Model 2 is also statistically significant, with a p-value of 0. Additionally, it explains 41.2% of the variation in log_price_4_nights, which is higher than Model 1. All variables are statistically significant aside from `prop_type_simplifiedOther`. To compare the two models, however, we need to look at the adjusted r-squared, since Model 2 includes one additional variable. Model 2 has an adjusted r-squared of 41.11% compared to 36.83% for Model 1. We can conclude that Model 2 has a higher predictive power than Model 1.
 
-Since room_type is a categorical variable with 4 possible options, the model only shows 3 coefficients. The fourth option (Entire Home/ Apartment) is incorporated in the intercept. To interpret the coefficients for a log-transformed dependent variable, we are going to take the exponent of the coefficient. This means that hotel rooms, for example, are on average 55.28% more expensive than entire home/apartments. Similarly, private rooms 41.4% cheaper, whereas shared rooms are 59.59% cheaper than entire homes.
+Since room_type is a categorical variable with 4 possible options, the model only shows 3 coefficients. The fourth option (Entire Home/ Apartment) is incorporated in the intercept. To interpret the coefficients for a log-transformed dependent variable, we are going to take the exponent of the coefficient. This means that hotel rooms, for example, are on average 55.27% more expensive than entire home/apartments. Similarly, private rooms 41.4% cheaper, whereas shared rooms are 59.6% cheaper than entire homes.
 
-Now, before we continue with additional model specifications, we are going to perform a VIF test to echeck for multicollinearity:
+Now, before we continue with additional model specifications, we are going to perform a VIF test to check for multicollinearity:
 ```{r}
 autoplot(model2)
 
@@ -1140,7 +1134,7 @@ Our dataset has many more variables, so we attempt to extend our analysis by add
 
 ```{r}
 
-# Model 3 - Adding property-specific characteristics to Model_Rooms. We exclude `bathrooms` because there is not data for any of the observations 
+# Model 3 - Adding property-specific characteristics to Model_Rooms. 
 
 model3 <- lm(log_price_4_nights ~ number_of_reviews + 
                                   review_scores_rating +
@@ -1169,9 +1163,9 @@ model3 %>%
 ```
 
 # @GROUP4: UPDATE COEFFICIENTS and statistical significance!!
-We see from the table that Model 3 is statistically significant and adding information about property amenities like number of bedrooms and how many people a property can accommodate greatly increases the predictive power of the model. We see an r-squared of 50.9% and an adjusted r-squared of 50.9%. Looking at the statistical significance of the explanatory variables, we find that they are all statistically significant at a least a 95% confidence level.
+We see from the table that Model 3 is statistically significant and adding information about property amenities like number of bedrooms and how many people a property can accommodate greatly increases the predictive power of the model. We see an r-squared of 50.9% and an adjusted r-squared of 50.9%. Looking at the statistical significance of the explanatory variables, we find that they are all statistically significant at least a 5% level.
 
-However, we need be weary of potential multicollinearity. Logivally, it could expected that bedrooms, beds, and 'accommodates' would be highly correlated. Therefore, we test for multicollinearity by running af VIF-test.
+However, we need be weary of potential multicollinearity. Logically, it could expected that bedrooms, beds, and 'accommodates' would be highly correlated. Therefore, we test for multicollinearity by running af VIF-test.
 
 ```{r}
 
@@ -1205,7 +1199,7 @@ huxtable:: huxreg(list("No-Accommodates Model" = model4_a),
 car::vif(model4_a)
 ```
 
-The model and all the descriptive statistics prove statistically significant. The predictive power of our model has decreased, however, from 40.5% adjusted r-squared to 48.4%. We will now try removing `beds` and running the regression with `accommodates` instead:
+The model and all the descriptive statistics prove statistically significant. The predictive power of our model has decreased, however, from 50.9% adjusted r-squared to 48.4%. We will now try removing `beds` and running the regression with `accommodates` instead:
 
 ```{r}
 
@@ -1230,7 +1224,7 @@ huxtable:: huxreg(list("No Beds Model" = model4_b),
 car::vif(model4_b)
 ```
 
-The predictive power of Model 4_b is higher than Model 4_a and all variables are statistically significant at the 95% confidence level. Comparing with model 3, we see that we arrive at a similar explanatory power of 50.9 % with a reduced number of explanatory variables. Furthermore, we see that the VIF-analysis returns a lower level of multicollinearity. Thus, we move forward with model 4_b, renaming it to model4.
+The predictive power of Model 4_b is higher than Model 4_a and all variables are statistically significant at the 5% level. Comparing with model 3 adjusted R-squared, we see that we arrive at a similar explanatory power of 50.9 % with a reduced number of explanatory variables. Furthermore, we see that the VIF-analysis returns a lower level of multicollinearity. Thus, we move forward with model 4_b, renaming it to model4.
 
 ```{r}
 # Model 5 - Model 4 + host_is_superhost
@@ -1290,62 +1284,8 @@ broom::tidy(conf.int=TRUE)
 
 ```
 
-First, we see that including the interaction term made number_of_reviews statistically significant again but the new model has a the same predictive power as the old one (51.2% adj. R squared). The way to interpret the new coefficient is as follows: when the host is not superhost, each additional review corresponds to approximately 0.03% higher price. When the host is a superhost, each additional review corresponds to 0.03% lower price. Additionally, being a superhost corresponds to 11.1% higher price when controlling for the number of reviews. Thus, all variables are statistically significant and the predictive power of our model is the highest we have achieved so far. However, intuitively, it does not make sense that an increase in number of reviews of superhosts decreases price.
-# THIS DOESN'T MAKE SENSE, PLEASE DOUBLE CHECK
+First, we see that including the interaction term made number_of_reviews statistically significant again but the new model has approximately the same predictive power as the old one (51.2% adj. R squared). The way to interpret the new coefficient is as follows: when the host is not superhost, each additional review corresponds to approximately 0.036% higher price. When the host is a superhost, each additional review corresponds to 0.06% lower price. Additionally, being a superhost corresponds to 11.8% higher price when controlling for the number of reviews. Thus, all variables are statistically significant and the predictive power of our model is the highest we have achieved so far. 
 
-<!-- We now see that review score is nolonger significant. One explanation for this could be that being a superhost is directly related to the score of a host. We will try to solve this problem by removing review_scores_rating -->
-
-
-<!-- ```{r} -->
-<!-- model6 <- lm(log_price_4_nights ~ number_of_reviews + -->
-<!--                                   room_type + -->
-<!--                                   bedrooms + -->
-<!--                                   beds+ -->
-<!--                                   host_is_superhost+ -->
-<!--                                   host_is_superhost*number_of_reviews, -->
-<!--                      data = listings_train) -->
-
-<!-- # We construct a table with the regression output -->
-<!-- huxtable:: huxreg(list("Superhost Model + Interaction - Reviews Score" = model6), -->
-<!--                   statistics = c('#observations' = 'nobs', -->
-<!--                                 'R squared' = 'r.squared', -->
-<!--                                 'Adj. R Squared' = 'adj.r.squared', -->
-<!--                                 'Residual SE' = 'sigma', -->
-<!--                                 'P-Value' = 'p.value') -->
-<!--                   ) -->
-<!-- car::vif(model6) -->
-
-<!-- model6 %>% -->
-<!-- broom::tidy(conf.int=TRUE) -->
-<!-- ``` -->
-
-<!-- Modle 6 has much lower predictive power than our previous model. Additionally, number_of_reviews is no longer statistically significant. The variable host_is_superhost is statistically significant and has a large effect on the log_price_4_nights. The probelm is that host_is_superhost is directly related to the number of reviews a host has and how high their score is. To determine weather we should proceed with host_is_superhost or review_score_rating and number_of_reviews, we will create another model and compare it to Model 4: -->
-
-<!-- ```{r} -->
-<!-- model7 <- lm(log_price_4_nights ~ room_type + -->
-<!--                                   bedrooms + -->
-<!--                                   accommodates+ -->
-<!--                                   host_is_superhost, -->
-<!--                      data = listings_train) -->
-
-<!-- # We construct a table with the regression output -->
-<!-- huxtable:: huxreg(list("Superhost Model Only" = model7),  -->
-<!--                   statistics = c('#observations' = 'nobs',  -->
-<!--                                 'R squared' = 'r.squared',  -->
-<!--                                 'Adj. R Squared' = 'adj.r.squared',  -->
-<!--                                 'Residual SE' = 'sigma', -->
-<!--                                 'P-Value' = 'p.value') -->
-<!--                   ) -->
-<!-- car::vif(model7) -->
-
-<!-- model7 %>%  -->
-<!-- broom::tidy(conf.int=TRUE) -->
-
-
-<!-- ``` -->
-
-
-<!-- Although all variables in Model 7 are statistically significant, the predictive power of the model is lower than Model 4. This means that host_is_superhost is less powerful than the combination of review_score_rating and number_of_reviews and we will not include it in our model. We will continue with our analysis using model specification 4. -->
 
 Next, we would like to include the variable `neighbourhood_simplified` with the following code:
 
@@ -1381,11 +1321,11 @@ broom::tidy(conf.int=TRUE)
 
 ```
 
-Model 6 is statistically significant and has the highest adjusted r-squared so far at 52.6%. Additionally, 52.7% of the variation in log_price_4_nights can be exmplained by Model 6. The variable `neighbourhood_simplified` has 6 possible values: Friedrichshain-Kreuzberg, Mitte, Pankow, Neukölln, Charlottenburg-Wilm, Tempelhof - Schöneberg, and Other. Since `neighbourhood_simplified` is a categorical variable, only 5 possible outcomes have their own coefficient, and the last one,Charlottenburg-Wilm , is incorporated into the intercept. Although not all neighbourhoods have a statistically significant effect on log price, properties in Mitte are on average 6.5% more expensive, where as properties in Neukolln, Pankow, and Tempelhof are 11.7%, 0.3%, and 5.8% cheaper than Charlottenburg-Wilm respectively.
+Model 6 is statistically significant and has the highest adjusted r-squared so far at 52.6%. Additionally, 52.7% of the variation in log_price_4_nights can be explained by Model 6. The variable `neighbourhood_simplified` has 6 possible values: Friedrichshain-Kreuzberg, Mitte, Pankow, Neukölln, Charlottenburg-Wilm, Tempelhof - Schöneberg, and Other. Since `neighbourhood_simplified` is a categorical variable, only 5 possible outcomes have their own coefficient, and the last one,Charlottenburg-Wilm , is incorporated into the intercept. Although not all neighbourhoods have a statistically significant effect on log price, properties in Mitte are on average 6.5% more expensive, where as properties in Neukolln, Pankow, and Tempelhof are 11.7%, 0.3%, and 5.8% cheaper than Charlottenburg-Wilm respectively.
 
 Since some neighbourhoods have a significant effect on log price and this model has the highest predictive power so far, we will proceed with Model 6.
 
-Next, we would like to add `avalability_30` or `reviews_per_month` to our analysis with the following code:
+Next, we would like to add `availability_30` or `reviews_per_month` to our analysis with the following code:
 
 ```{r}
 
@@ -1471,6 +1411,10 @@ car::vif(model8)
 
 ```
 
+This model gives us the highest adjusted R-squared so far (61.8%) and explains 62.0% of the variation in the log price. In addition, all the coefficients except for `neighbourhood_simplifiedTempelhof - Schöneberg` are statistically significant at the 5% level. However, we will not remove this as this forms part of a categorical variable whose other coefficients are significant.
+
+Despite this, the addition of all these new variables has made the model complicated. In our next model, we observe that when retaining significant and relevant variables, with only 7 variables, we are able to reduce number of explanatory variables by 6 and only drop explanatory power by 4.4 %, which leads to a less complicated and superior model from a complexity vs. explanatory power-tradeoff.
+
 ```{r}
 model9 <- lm(log_price_4_nights ~ 
                                   room_type +
@@ -1493,9 +1437,10 @@ huxtable:: huxreg(list("model9" = model9),
                   )
 car::vif(model9)
 ```
-In our model 8, we included 13 variables, many with a number of subvariables. The explanatory power was 62%, which although great, made the model complicated. In model 9, we observe that when retaining significant and relevant variables, with only 7 variables, we are able to reduce number of explanatory variables by 6 variables and only drop explanatory power by 4.4 %, which leads to a less complicated and superior model from a complexity vs. explanatory power-tradeoff. Comparing model 9
 
-Now, we check the residuals of our two models.
+We believe that model 9, our latest model, strikes a good balance between simplicity and explanatory power and the variables in the model reflect our intuition about predictors of price.
+
+Now, we check the residuals of our models.
 
 ```{r}
 autoplot(model1)
@@ -1517,8 +1462,72 @@ huxtable:: huxreg(list(model1,model2, model3, model4, model5, model6, model7, mo
                   )
 
 ```
+Looking at model 9, plot of the residuals against fitted values has a mean hovering around 0. They don't appear to be correlated with the fitted values. Furthermore, the Q-Q plot shows the residuals are approximately normally distributed (with perhaps a slight skew indicated by the deviation from the diagonal line). In addition, the variability is approximately constant indicated by the scale-location graph.
 
-@GROUP4 : WHAT DOES THIS MEAN??
+## Prediction and analysis
+
+We now take Model 9 RMSE on the out-of-sample data. We also calculate the RMSE on the in-sample data as a benchmark.
+
+```{r}
+
+rmse_train<-listings_train %>% 
+  mutate(predictions = predict(model9,.)) %>% 
+  select(predictions,log_price_4_nights) %>% 
+  mutate(squared_error = (predictions - log_price_4_nights)^2) %>%
+  summarise(rmse = sqrt(mean(squared_error, na.rm=TRUE))) %>% 
+  pull
+
+rmse_train
+
+
+rmse_test <- listings_test %>% 
+  mutate(predictions = predict(model9,.)) %>% 
+  select(predictions,log_price_4_nights) %>% 
+  mutate(squared_error = (predictions - log_price_4_nights)^2) %>% 
+  summarise(rmse = sqrt(mean(squared_error, na.rm=TRUE))) %>% 
+  pull()
+
+rmse_test
+```
+
+The RMSEs are similar for the in-sample and out-of-sample data, so we can see that model 9 does not overfit.
+
+
+Finally, we calculate the predictions of price using model 9 for apartments with a private room, have at least 10 reviews, and which have an average rating of at least 4.5
+
+```{r}
+
+subset<-listings_test %>% 
+  filter(
+    room_type=="Private room",
+    number_of_reviews>=10,
+    review_scores_rating>=4.5
+    )
+
+predicted_logprices<-model9 %>% 
+                    predict(subset) %>% 
+                    as.data.frame()
+
+favstats(~., data=predicted_logprices) %>% 
+  mutate(lower=mean-1.96*sd/sqrt(n),
+         upper=mean+1.96*sd/sqrt(n),
+         lower_nominal=exp(lower), #Here we convert from log prices to prices.
+         upper_nominal=exp(upper),
+         mean_nominal=exp(mean),
+         min_nominal=exp(min),
+         max_nominal=exp(max)) %>% 
+  select(min_nominal, 
+         mean_nominal, 
+         max_nominal, 
+         lower_nominal,
+         upper_nominal
+         )
+  
+
+```
+Based on our predictions, the price for 4 nights is expected to be approximately 163 dollars, with a 95% confidence interval ranging from 158.79-166.34.
+
+
 
 ## Diagnostics, collinearity, summary tables
 
