@@ -67,12 +67,13 @@ There are many variables in the dataframe. Here is a quick description of some o
 - `property_type`: type of accommodation (House, Apartment, etc.)
 - `room_type`:
 
-  - Entire home/apt (guests have entire place to themselves)
+  - Entire home/apt (Guests have entire place to themselves)
   - Private room (Guests have private room to sleep, all other rooms shared)
   - Shared room (Guests sleep in room shared with others)
+  - Hotel room (Hotel rooms offered through AirBnB)
 
 - `number_of_reviews`: Total number of reviews for the listing
-- `review_scores_rating`: Average review score (0 - 100)
+- `review_scores_rating`: Average review score (0.0 - 5.0)
 - `longitude` , `latitude`: geographical coordinates to help us locate the listing
 - `neighbourhood*`: three variables on a few major neighbourhoods in each city 
 
@@ -88,7 +89,7 @@ listings %>%
 ```
 > Our dataset has 18,288 observations and 74 variables. It includes details about Airbnb listings in Berlin.
 
-### Computing summary statistics of the variables of interest, or finding NAs
+## Summary Statistics and Missing Values
 
 ```{r}
 
@@ -101,20 +102,25 @@ listings %>%
 We will now list the variable names by type:
 
 ### Numeric
+
 ```{r}
 listings %>% 
   skim() %>% 
   filter(skim_type=="numeric") %>% 
   select(skim_variable)
 ```
+
 ### Factor
+
 ```{r}
 listings %>% 
   skim() %>% 
   filter(skim_type=="logical") %>% 
   select(skim_variable)
 ```
+
 ### Character
+
 ```{r}
 listings %>% 
   skim() %>% 
@@ -146,7 +152,7 @@ listings %>%
 
 Now we will look at the variables in more detail and construct our dependent variable of interest: price per 4 nights for 2 people. 
 
-## Minimum Nights
+### Minimum Nights
 
 Airbnb is most commonly used for travel purposes, i.e., as an alternative to traditional hotels. However, some properties might be intended for other purposes. We only want to include  listings in our regression analysis that are intended for travel purposes. In order to do this, we need to look at `minimum_nights` in more detail:
 
@@ -834,6 +840,7 @@ listings %>%
        caption="Data from: http://insideairbnb.com/get-the-data.html") + 
   theme_bw()
 ```
+
 ### Superhost
 
 In our analysis, we will also consider whether being a `host_is_superhost` is an important factor in determining the price of a 4-night stay. Let's look at the proportions of listings which fall into each category.
@@ -1081,7 +1088,7 @@ car::vif(model2_room)
 
 ## Further Model Specifications
 
-Our dataset has many more variables, so we attempt to extend our analysis by adding a number of variables, which could prove useful in increasing the explanatory power of our model.
+Our dataset has many more variables, so we attempt to extend our analysis by adding a number of variables, which could prove useful in increasing the explanatory power of our model. As a start, we will address the following questions:
 
 1. Are the number of `bathrooms`, `bedrooms`, `beds`, or size of the house (`accomodates`) significant predictors of `price_4_nights`? Or might these be co-linear variables?
 2. Do superhosts `(host_is_superhost`) command a pricing premium, after controlling for other variables?
@@ -1182,6 +1189,8 @@ car::vif(model4_b)
 
 The predictive power of Model 4_b is higher than Model 4_a and all variables are statistically significant at the 5% level. Comparing with model 3 adjusted R-squared, we see that we arrive at a similar explanatory power of 50.9 % with a reduced number of explanatory variables. Furthermore, we see that the VIF-analysis returns a lower level of multicollinearity. Thus, we move forward with model 4_b, renaming it to model4.
 
+Next step is to investigate the explanatory power of host_is_superhost as an independent variable.
+
 ```{r}
 # Model 5 - Model 4 + host_is_superhost
 
@@ -1211,7 +1220,7 @@ car::vif(model5)
 
 
 ```
-Model 5 is statistically significant, with a p-value of 0. Additionally, Model 5 has a slightly better predictive power than Model 4, although the difference in adj. r-squared is very small (0.3%). The new variable we added, `host_is_superhost`, is statistically significant, but now the number_of_reviews is not. One potential explanation is that the the number of reviews has different effect on the price depending on whether the host is a superhost or not. To deal with this, we will create an interaction term between `host_is_superhost` and `number_of_reviews`:
+Model 5 is statistically significant, with a p-value of 0. Additionally, Model 5 has a slightly better predictive power than Model 4, although the difference in adj. r-squared is very small (0.3%). The new variable we added, `host_is_superhost`, is statistically significant, but now the `number_of_reviews` is not. One potential explanation is that the the number of reviews has different effect on the price depending on whether the host is a superhost or not. To deal with this, we will create an interaction term between `host_is_superhost` and `number_of_reviews`:
 
 ```{r}
 
@@ -1240,7 +1249,7 @@ broom::tidy(conf.int=TRUE)
 
 ```
 
-First, we see that including the interaction term made number_of_reviews statistically significant again but the new model has approximately the same predictive power as the old one (51.2% adj. R squared). The way to interpret the new coefficient is as follows: when the host is not superhost, each additional review corresponds to approximately 0.036% higher price. When the host is a superhost, each additional review corresponds to 0.026% lower price. Additionally, being a superhost corresponds to 11.2% higher price when controlling for the number of reviews. Thus, all variables are statistically significant and the predictive power of our model is the highest we have achieved so far. 
+First, we see that including the interaction term made `number_of_reviews` statistically significant again but the new model has approximately the same predictive power as the old one (51.2% adj. R squared). The way to interpret the new coefficient is as follows: when the host is not superhost, each additional review corresponds to approximately 0.036% higher price. When the host is a superhost, each additional review corresponds to 0.026% lower price. Additionally, being a superhost corresponds to 11.2% higher price when controlling for the number of reviews. Thus, all variables are statistically significant and the predictive power of our model is the highest we have achieved so far. 
 
 
 Next, we would like to include the variable `neighbourhood_simplified` with the following code:
@@ -1478,10 +1487,9 @@ favstats(~., data=predicted_logprices) %>%
          lower_nominal,
          upper_nominal
          )
-  
 
 ```
-Based on our predictions, the price for 4 nights is expected to be approximately *163 dollars*, with a 95% confidence interval ranging from 158.79-166.34.
+Based on our predictions, the average price for 4 nights is expected to be approximately *163 dollars*, with a 95% confidence interval ranging from 158.79-166.34.
 
 
 # Acknowledgements
