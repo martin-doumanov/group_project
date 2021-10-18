@@ -1405,7 +1405,7 @@ car::vif(model9)
 
 We believe that Model 9, our latest model, strikes a good balance between simplicity and explanatory power and the variables in the model reflect our intuition about predictors of price.
 
-Now, we check the residuals of our models.
+Now, we check the residuals of our models. Furthermore, we compare all of our models' statistical significance and explanatory power using the huxtable package
 
 ```{r}
 autoplot(model1)
@@ -1428,6 +1428,8 @@ huxtable:: huxreg(list(model1,model2, model3, model4, model5, model6, model7, mo
 
 ```
 Looking at Model 9, plot of the residuals against fitted values has a mean hovering around 0. They don't appear to be correlated with the fitted values. Furthermore, the Q-Q plot shows the residuals are approximately normally distributed (with perhaps a slight skew indicated by the deviation from the diagonal line). In addition, the variability is approximately constant indicated by the scale-location graph.
+
+Comparing the statistical significance and explanatory power of all of our models, we maintain our view that model9 is the superior model. This is given its overall statistical significance as well as variable-specific statistical significance. Furthermore, we find that the explanatory power of the model is superior given the relatively low number of explanatory variables compared to other models with similar explanatory power such as model8, where a large number of explanatory variables may increase risk of overfitting. Finally, we find that, intuitively, all our variables in model9 seem rationally correlated with the price of an AirBnB listing. Thus, we we will use model9 in our prediction and analysis below.
 
 ## Prediction and analysis
 
